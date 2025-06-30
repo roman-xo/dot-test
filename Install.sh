@@ -1,66 +1,54 @@
-#!/bin/bash
-
-# Exit if any command fails
+#!/usr/bin/env bash
 set -e
 
-# Update system
+echo "[*] 1/7 | System update & core packages"
 sudo pacman -Syu --noconfirm
-
-# Install essential packages
 sudo pacman -S --noconfirm \
-    bspwm sxhkd picom kitty zsh feh xorg-server xorg-xinit \
-    git curl wget unzip neofetch htop \
-    python-pywal unzip \
-    sddm xdg-user-dirs
+  bspwm sxhkd picom kitty zsh feh xorg-server xorg-xinit \
+  git curl wget unzip neofetch htop python-pywal \
+  polybar rofi pavucontrol dolphin sddm xdg-user-dirs
 
-# Optional but useful
-sudo pacman -S --noconfirm thunar pavucontrol rofi
-
-# Install Nerd Fonts (JetBrainsMono + Symbols) using an AUR helper
-if ! command -v yay &> /dev/null; then
-    echo "Installing yay (AUR helper)..."
-    cd /opt
-    sudo git clone https://aur.archlinux.org/yay.git
-    sudo chown -R $USER:$USER yay
-    cd yay
-    makepkg -si --noconfirm
-    cd ~
+echo "[*] 2/7 | Install yay (AUR helper) if missing"
+if ! command -v yay >/dev/null; then
+  git clone https://aur.archlinux.org/yay.git /tmp/yay
+  cd /tmp/yay
+  makepkg -si --noconfirm
+  cd ~ && rm -rf /tmp/yay
+else
+  echo "-- yay already installed"
 fi
 
-yay -S --noconfirm nerd-fonts-jetbrains-mono ttf-symbols-nerd
+echo "[*] 3/7 | Install Nerd Fonts"
+yay -S --noconfirm nerd-fonts-jetbrains-mono nerd-fonts-symbols
 
-# Enable SDDM
+echo "[*] 4/7 | Oh My Zsh + autosuggestions"
+if [ ! -d "$HOME/.oh-my-zsh" ]; then
+  sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+fi
+ZSH_CUSTOM=${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}
+if [ ! -d "$ZSH_CUSTOM/plugins/zsh-autosuggestions" ]; then
+  git clone https://github.com/zsh-users/zsh-autosuggestions "$ZSH_CUSTOM/plugins/zsh-autosuggestions"
+fi
+
+echo "[*] 5/7 | Copy dotfiles from repo"
+DOT="$HOME/.dotfiles"
+if [ ! -d "$DOT" ]; then
+  git clone https://github.com/roman-xo/dot-test.git "$DOT"
+fi
+cp -rT "$DOT/.config" "$HOME/.config"
+cp "$DOT/.zshrc" "$HOME/.zshrc"
+[ -f "$DOT/.xprofile" ] && cp "$DOT/.xprofile" "$HOME/.xprofile"
+chmod +x "$HOME/.config/bspwm/bspwmrc" "$HOME/.config/sxhkd/sxhkdrc"
+
+echo "[*] 6/7 | Enable display manager & default shell"
+chsh -s "$(which zsh)"
 sudo systemctl enable sddm
 
-# Set Zsh as default shell
-chsh -s $(which zsh)
-
-# Install Oh My Zsh
-if [ ! -d "$HOME/.oh-my-zsh" ]; then
-    echo "Installing Oh My Zsh..."
-    sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+echo "[*] 7/7 | Apply wallpaper + pywal (ensure ~/.config/wall.jpg exists)"
+if [ -f "$HOME/.config/wall.jpg" ]; then
+  wal -i "$HOME/.config/wall.jpg"
+else
+  echo "-- No wallpaper found at ~/.config/wall.jpg. Skipped pywal."
 fi
 
-# Clone zsh-autosuggestions if not already
-if [ ! -d "${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions" ]; then
-    git clone https://github.com/zsh-users/zsh-autosuggestions \
-        ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
-fi
-
-# Setup XDG user dirs
-xdg-user-dirs-update
-
-# Copy dotfiles from repo to home
-echo "Copying dotfiles..."
-cp -r .config ~/
-cp .zshrc ~/
-
-# Ensure scripts are executable
-chmod +x ~/.config/bspwm/bspwmrc
-chmod +x ~/.config/sxhkd/sxhkdrc
-
-# Set wallpaper and generate Pywal theme
-wal -i ~/Pictures/wallpaper.jpg || wal -n -c # fallback if no image
-
-echo "Done! Rebooting into your new environment..."
-reboot
+echo "[✓] Setup complete! Reboot to enjoy your riced desktop."
