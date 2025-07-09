@@ -1,39 +1,55 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/bash
 
+set -e
+
+echo ">>> Beginning setup..."
+
+# Define dotfiles repo directory
 DOTFILES_DIR="$HOME/.dotfiles"
-REPO_URL="https://github.com/roman-xo/dot-test.git"
 
-echo ">>> Installing base packages..."
-sudo pacman -Syu --noconfirm
-sudo pacman -S --noconfirm git bspwm sxhkd polybar rofi picom feh \
-  alacritty zsh neofetch pywal sddm xorg-server xorg-xinit \
-  network-manager-applet networkmanager unzip
+# Required packages
+PACKAGES=(
+  bspwm sxhkd polybar rofi picom alacritty feh zsh git curl unzip wget pywal
+  neofetch networkmanager sddm xorg xorg-xinit
+)
 
-echo ">>> Cloning dotfiles..."
+echo ">>> Installing required packages..."
+sudo pacman -Syu --needed --noconfirm "${PACKAGES[@]}"
+
+# Clone dotfiles if not already
 if [ ! -d "$DOTFILES_DIR" ]; then
-  git clone "$REPO_URL" "$DOTFILES_DIR"
+  echo ">>> Cloning dotfiles..."
+  git clone https://github.com/roman-xo/dot-test "$DOTFILES_DIR"
 fi
 
-echo ">>> Linking configs..."
-ln -sf "$DOTFILES_DIR/.xinitrc" "$HOME/.xinitrc"
+echo ">>> Symlinking dotfiles..."
 ln -sf "$DOTFILES_DIR/.zshrc" "$HOME/.zshrc"
+ln -sf "$DOTFILES_DIR/.config" "$HOME/.config"
+ln -sf "$DOTFILES_DIR/.xinitrc" "$HOME/.xinitrc" 2>/dev/null || true
 
-for cfg in bspwm sxhkd polybar rofi picom alacritty wal; do
-  mkdir -p "$HOME/.config/$cfg"
-  ln -sf "$DOTFILES_DIR/.config/$cfg/"* "$HOME/.config/$cfg/"
-done
-
-echo ">>> Installing Oh My Zsh..."
-if [ ! -d "$HOME/.oh-my-zsh" ]; then
-  sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
-fi
-
-echo ">>> Enabling services..."
-sudo systemctl enable --now sddm
-sudo systemctl enable --now NetworkManager
+echo ">>> Installing oh-my-zsh..."
+export RUNZSH=no
+export CHSH=no
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
 
 echo ">>> Setting Zsh as default shell..."
 chsh -s "$(which zsh)"
 
-echo ">>> Setup Complete!"
+echo ">>> Enabling services..."
+sudo systemctl enable NetworkManager
+sudo systemctl enable sddm
+
+echo ">>> Setting up wallpaper and pywal..."
+mkdir -p "$HOME/wallpapers"
+cp "$DOTFILES_DIR/wallpapers/default.jpg" "$HOME/wallpapers/default.jpg"
+
+# Generate pywal theme
+wal -i "$HOME/wallpapers/default.jpg"
+
+echo ">>> Writing .xprofile for auto-theme on login..."
+cat << 'EOF' > "$HOME/.xprofile"
+[ -f "$HOME/.cache/wal/colors.sh" ] && source "$HOME/.cache/wal/colors.sh"
+feh --bg-scale "$(cat "$HOME/.cache/wal/wal")"
+EOF
+
+echo ">>> Done! Reboot to enter your custom environment."
